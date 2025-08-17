@@ -15,26 +15,31 @@ jobs:
 
       - name: Install build deps
         run: |
+          set -e
           sudo apt-get update
           sudo apt-get install -y build-essential autoconf automake libtool m4 wget ca-certificates pkg-config
 
       - name: Download source
         run: |
+          set -e
           wget -q -O inotify-tools-3.20.11.0.tar.gz https://github.com/inotify-tools/inotify-tools/archive/refs/tags/3.20.11.0.tar.gz
           tar xzf inotify-tools-3.20.11.0.tar.gz
 
       - name: Build
         run: |
+          set -e
           cd inotify-tools-3.20.11.0
           ./autogen.sh
           ./configure --prefix=/usr
           make -j$(nproc)
 
+          # debug listing to help diagnose wrapper vs real-binary issues
           echo "=== ls src ==="
           ls -l src || true
           echo "=== ls src/.libs ==="
           ls -l src/.libs || true
 
+          # Prefer the real .libs binaries if present
           if [ -x src/.libs/inotifywait ]; then
             cp src/.libs/inotifywait $GITHUB_WORKSPACE/inotifywait
             cp src/.libs/inotifywatch $GITHUB_WORKSPACE/inotifywatch
@@ -43,6 +48,11 @@ jobs:
             cp src/inotifywatch $GITHUB_WORKSPACE/inotifywatch
           fi
 
+          # ensure executable and strip to reduce size (strip may be no-op if not available)
+          chmod +x $GITHUB_WORKSPACE/inotifywait $GITHUB_WORKSPACE/inotifywatch || true
+          command -v strip >/dev/null 2>&1 && strip --strip-all $GITHUB_WORKSPACE/inotifywait $GITHUB_WORKSPACE/inotifywatch || true
+
+          # show types for verification in logs
           file $GITHUB_WORKSPACE/inotifywait || true
           file $GITHUB_WORKSPACE/inotifywatch || true
 
